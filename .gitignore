@@ -2,5 +2,7 @@
 Thumbs.db
 server.py
 publish_live.py
+backfill_live_month.py
+_probe_*.py
 __pycache__/
 *.pyc

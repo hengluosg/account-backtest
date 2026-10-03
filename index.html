@@ -107,7 +107,7 @@
       gap: 10px;
       margin-bottom: 14px;
     }
-    .live-grid { grid-template-columns: 1fr; max-width: 480px; }
+    .live-grid { grid-template-columns: 1fr 1fr; }
     .cards { grid-template-columns: 1fr; }
     .card {
       background: var(--card);
@@ -117,10 +117,6 @@
     }
     .card.active { border-color: color-mix(in srgb, currentColor 55%, var(--line)); }
     .live-card { cursor: default; }
-    .live-card .v {
-      font-size: 36px;
-      color: var(--cyan);
-    }
     .card .k {
       color: var(--muted);
       font-size: 12px;
@@ -183,7 +179,7 @@
       header h1 { font-size: 28px; }
       .wrap { padding: 22px 28px 48px; }
       .tabs { width: 280px; }
-      .cards { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      .cards, .live-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
       #navChart { height: 460px; }
       #ddChart { height: 250px; }
       #yearChart { height: 320px; }
@@ -510,7 +506,14 @@
         if (!d.ok) throw new Error(d.error || "查询失败");
         meta.textContent = `${d.env} · ${d.card} · ${d.updated}`;
         if (d.hkd_assets && d.total_assets) liveFx = Number(d.hkd_assets) / Number(d.total_assets);
-        grid.innerHTML = liveCard("港币总资产", "HK$" + money(d.hkd_assets, 0), "同一账户");
+        grid.innerHTML = [
+          liveCard("总资产", "$" + money(d.total_assets, 2), "美元"),
+          liveCard("持仓市值", "$" + money(d.market_val, 2), "证券"),
+          liveCard("现金", "$" + money(d.cash, 2), "美元现金", d.cash < 0),
+          liveCard("购买力", "$" + money(d.power, 2), ""),
+          liveCard("冻结资金", "$" + money(d.frozen_cash, 2), ""),
+          liveCard("港币总资产", "HK$" + money(d.hkd_assets, 0), "同一账户"),
+        ].join("");
         if (!livePoints.length) {
           livePoints = [{
             t: d.updated,

@@ -1,6 +1,6 @@
 .DS_Store
 Thumbs.db
 server.py
-account.json
+publish_live.py
 __pycache__/
 *.pyc

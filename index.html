@@ -375,7 +375,7 @@
           if (res.ok) d = await res.json();
         } catch (e) {}
         if (!d || !d.ok) {
-          const snap = await fetch("account.json", { cache: "no-store" });
+          const snap = await fetch("account.json?t=" + Date.now(), { cache: "no-store" });
           d = await snap.json();
         }
         if (!d.ok) throw new Error(d.error || "查询失败");

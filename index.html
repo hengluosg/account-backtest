@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>账户与回测</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Noto+Sans+SC:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="data.js"></script>
+  <style>
+    :root {
+      --bg: #05070d;
+      --paper: rgba(8, 16, 32, 0.72);
+      --ink: #e7f7ff;
+      --muted: #7ea3bb;
+      --line: rgba(0, 245, 255, 0.22);
+      --cyan: #00f5ff;
+      --magenta: #ff2bd6;
+      --lime: #b6ff3b;
+      --neg: #ff4d6d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.5;
+      background:
+        radial-gradient(1200px 500px at 12% -10%, rgba(0, 245, 255, 0.16), transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, rgba(255, 43, 214, 0.12), transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0, 245, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 245, 255, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+    }
+    header {
+      position: relative;
+      padding: 28px 28px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(5, 10, 22, 0.78);
+      backdrop-filter: blur(16px);
+    }
+    header h1 {
+      margin: 0 0 6px;
+      font-family: Orbitron, "Noto Sans SC", sans-serif;
+      font-size: 28px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      text-shadow: 0 0 18px rgba(0, 245, 255, 0.45);
+    }
+    header p { margin: 0; color: var(--muted); max-width: 880px; }
+    .wrap { position: relative; padding: 20px 28px 48px; max-width: 1280px; width: 100%; margin: 0 auto; }
+    #navChart, #ddChart, #yearChart { width: 100%; }
+    .js-plotly-plot, .plot-container { width: 100% !important; margin: 0 auto; }
+    .cards, .live-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(12, 28, 48, 0.9), rgba(6, 12, 24, 0.92));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 18px;
+      cursor: pointer;
+      box-shadow: 0 0 0 1px rgba(0, 245, 255, 0.04), 0 12px 40px rgba(0, 0, 0, 0.35);
+      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(0, 245, 255, 0.55);
+      box-shadow: 0 0 24px rgba(0, 245, 255, 0.18);
+    }
+    .card.active { box-shadow: 0 0 0 1px currentColor, 0 0 28px color-mix(in srgb, currentColor 35%, transparent); }
+    .card .k {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+      .card .v {
+      font-family: Orbitron, sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 8px 0 4px;
+      text-shadow: 0 0 14px color-mix(in srgb, currentColor 45%, transparent);
+    }
+    .card .s { font-size: 13px; color: var(--muted); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    button, select {
+      border: 1px solid var(--line);
+      background: rgba(8, 18, 36, 0.85);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button:hover { border-color: var(--cyan); color: var(--cyan); }
+    button.on {
+      background: linear-gradient(90deg, rgba(0, 245, 255, 0.2), rgba(255, 43, 214, 0.16));
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(0, 245, 255, 0.2);
+    }
+    .panel {
+      background: rgba(7, 14, 28, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 10px 4px;
+      margin-bottom: 16px;
+      box-shadow: inset 0 0 40px rgba(0, 245, 255, 0.04);
+    }
+    .panel h2 {
+      margin: 8px 14px 0;
+      font-size: 14px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    footer { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .tabs { display: flex; gap: 8px; margin-top: 16px; }
+    .tabs button { border-radius: 10px; letter-spacing: 0.12em; }
+    .view { display: none; }
+    .view.show { display: block; }
+    .live-card { cursor: default; }
+    .live-card .v.neg { color: var(--neg); text-shadow: 0 0 12px rgba(255, 77, 109, 0.35); }
+    .live-meta { color: var(--muted); font-size: 13px; margin: 8px 0 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .err { color: var(--neg); }
+    @media (max-width: 900px) {
+      .cards, .live-grid { grid-template-columns: 1fr; }
+      header, .wrap { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>账户与回测</h1>
+    <p id="subtitle"></p>
+    <div class="tabs">
+      <button class="on" id="tabLive">实盘</button>
+      <button id="tabBack">回测</button>
+    </div>
+  </header>
+  <div class="wrap">
+    <section class="view show" id="viewLive">
+      <div class="live-meta">
+        <span id="liveMeta">正在读取实盘账户…</span>
+        <button id="refreshLive">刷新</button>
+      </div>
+      <div class="live-grid" id="liveGrid"></div>
+    </section>
+    <section class="view" id="viewBack">
+    <section class="cards" id="cards"></section>
+    <div class="toolbar">
+      <button class="on" data-key="seriesA">组合 A</button>
+      <button class="on" data-key="strategy">STRATEGY</button>
+      <button class="on" data-key="spy">标普 SP 500</button>
+      <button id="logBtn">对数坐标</button>
+      <button id="relBtn">归一化到 1</button>
+    </div>
+    <section class="panel">
+      <h2>净值曲线 · 可缩放、可悬停</h2>
+      <div id="navChart" style="height:460px;"></div>
+    </section>
+    <section class="panel">
+      <h2>回撤</h2>
+      <div id="ddChart" style="height:240px;"></div>
+    </section>
+    <section class="panel">
+      <h2>分年收益</h2>
+      <div id="yearChart" style="height:320px;"></div>
+    </section>
+    <footer>悬停图表看具体数值，拖拽可放大区间。选股细节不公开。</footer>
+    </section>
+  </div>
+  <script>
+    const D = window.BACKTEST;
+    const LABELS = { seriesA: "组合 A", strategy: "STRATEGY", spy: "标普 SP 500" };
+    const COLORS = { seriesA: "#00f5ff", strategy: "#ff2bd6", spy: "#b6ff3b" };
+    const vis = { seriesA: true, strategy: true, spy: true };
+    let logScale = false;
+    let relative = false;
+
+    document.getElementById("subtitle").textContent = "实盘资金";
+
+    const cards = document.getElementById("cards");
+    ["seriesA", "strategy", "spy"].forEach((k) => {
+      const m = D.metrics[k];
+      const el = document.createElement("div");
+      el.className = "card active";
+      el.style.color = COLORS[k];
+      el.dataset.key = k;
+      el.innerHTML = `
+        <div class="k">${LABELS[k]}</div>
+        <div class="v">$${(m.final / 1e6).toFixed(2)}M</div>
+        <div class="s">累计 ${(m.total * 100).toFixed(1)}% · 年化 ${(m.cagr * 100).toFixed(1)}% · 回撤 ${(m.mdd * 100).toFixed(1)}% · 夏普 ${m.sharpe}</div>`;
+      el.onclick = () => {
+        vis[k] = !vis[k];
+        el.classList.toggle("active", vis[k]);
+        document.querySelector(`button[data-key="${k}"]`).classList.toggle("on", vis[k]);
+        drawAll();
+      };
+      cards.appendChild(el);
+    });
+
+    document.querySelectorAll("button[data-key]").forEach((btn) => {
+      btn.onclick = () => {
+        const k = btn.dataset.key;
+        vis[k] = !vis[k];
+        btn.classList.toggle("on", vis[k]);
+        document.querySelector(`.card[data-key="${k}"]`).classList.toggle("active", vis[k]);
+        drawAll();
+      };
+    });
+    document.getElementById("logBtn").onclick = function () {
+      logScale = !logScale;
+      this.classList.toggle("on", logScale);
+      drawNav();
+    };
+    document.getElementById("relBtn").onclick = function () {
+      relative = !relative;
+      this.classList.toggle("on", relative);
+      drawNav();
+    };
+
+    function seriesY(key) {
+      const arr = D.nav[key];
+      if (!relative) return arr;
+      const base = arr[0];
+      return arr.map((v) => v / base);
+    }
+
+    const layoutBase = {
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      autosize: true,
+      font: { family: "Noto Sans SC, Microsoft YaHei, sans-serif", color: "#d7f6ff" },
+      margin: { l: 92, r: 28, t: 28, b: 56 },
+      legend: { orientation: "h", y: 1.08, x: 0.5, xanchor: "center", font: { color: "#d7f6ff" } },
+      hovermode: "x unified",
+      hoverlabel: { bgcolor: "#07101c", bordercolor: "#00f5ff", font: { color: "#e7f7ff" } },
+      xaxis: { automargin: true, gridcolor: "rgba(0,245,255,0.10)", zerolinecolor: "rgba(0,245,255,0.18)", linecolor: "rgba(0,245,255,0.25)" },
+      yaxis: {
+        automargin: true,
+        title: { standoff: 18 },
+        tickprefix: "  ",
+        gridcolor: "rgba(0,245,255,0.10)",
+        zerolinecolor: "rgba(0,245,255,0.18)",
+        linecolor: "rgba(0,245,255,0.25)",
+      },
+    };
+
+    function traces(kind) {
+      return ["seriesA", "strategy", "spy"].filter((k) => vis[k]).map((k) => ({
+        x: D.dates,
+        y: kind === "nav" ? seriesY(k) : D.drawdown[k],
+        name: LABELS[k],
+        type: "scatter",
+        mode: "lines",
+        line: { color: COLORS[k], width: 2.4 },
+        hovertemplate: "%{x}<br>%{y}<extra>" + LABELS[k] + "</extra>",
+      }));
+    }
+
+    function yTitle(text) {
+      return { ...layoutBase.yaxis.title, text };
+    }
+
+    function drawNav() {
+      Plotly.react("navChart", traces("nav"), {
+        ...layoutBase,
+        yaxis: {
+          ...layoutBase.yaxis,
+          title: yTitle(relative ? "归一化净值" : "组合市值（美元）"),
+          type: logScale ? "log" : "linear",
+          tickformat: relative ? ".2f" : ",.0f",
+        },
+        xaxis: { ...layoutBase.xaxis, rangeslider: { visible: true, bgcolor: "rgba(0,245,255,0.06)" }, type: "date" },
+      }, { responsive: true, displayModeBar: true });
+    }
+
+    function drawDd() {
+      Plotly.react("ddChart", traces("dd"), {
+        ...layoutBase,
+        yaxis: { ...layoutBase.yaxis, title: yTitle("回撤"), tickformat: ".0%" },
+        xaxis: { ...layoutBase.xaxis, type: "date" },
+      }, { responsive: true, displayModeBar: false });
+    }
+
+    function drawYear() {
+      const years = D.yearly.map((r) => String(r.year));
+      const bars = ["seriesA", "strategy", "spy"].filter((k) => vis[k]).map((k) => ({
+        x: years,
+        y: D.yearly.map((r) => r[k] * 100),
+        name: LABELS[k],
+        type: "bar",
+        marker: { color: COLORS[k] },
+        hovertemplate: "%{x}<br>%{y:.1f}%<extra>" + LABELS[k] + "</extra>",
+      }));
+      Plotly.react("yearChart", bars, {
+        ...layoutBase,
+        barmode: "group",
+        yaxis: { ...layoutBase.yaxis, title: yTitle("当年收益（%）"), zeroline: true },
+        xaxis: { ...layoutBase.xaxis },
+      }, { responsive: true, displayModeBar: false });
+    }
+
+    function resizeCharts() {
+      ["navChart", "ddChart", "yearChart"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el && el.data) Plotly.Plots.resize(el);
+      });
+    }
+
+    function drawAll() { drawNav(); drawDd(); drawYear(); resizeCharts(); }
+    window.addEventListener("resize", resizeCharts);
+
+    const tabLive = document.getElementById("tabLive");
+    const tabBack = document.getElementById("tabBack");
+    tabLive.onclick = () => {
+      tabLive.classList.add("on");
+      tabBack.classList.remove("on");
+      document.getElementById("viewLive").classList.add("show");
+      document.getElementById("viewBack").classList.remove("show");
+      document.getElementById("subtitle").textContent = "实盘资金";
+    };
+    tabBack.onclick = () => {
+      tabBack.classList.add("on");
+      tabLive.classList.remove("on");
+      document.getElementById("viewBack").classList.add("show");
+      document.getElementById("viewLive").classList.remove("show");
+      document.getElementById("subtitle").textContent =
+        D.meta.start + " 至 " + D.meta.end + " · 历史收益曲线";
+      requestAnimationFrame(() => {
+        drawAll();
+        requestAnimationFrame(resizeCharts);
+      });
+    };
+
+    function money(v, digits) {
+      if (v == null || Number.isNaN(v)) return "—";
+      return Number(v).toLocaleString("en-US", {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
+    }
+
+    function liveCard(label, value, extra, neg) {
+      return `<div class="card live-card"><div class="k">${label}</div>
+        <div class="v${neg ? " neg" : ""}">${value}</div>
+        <div class="s">${extra || ""}</div></div>`;
+    }
+
+    async function loadLive() {
+      const meta = document.getElementById("liveMeta");
+      const grid = document.getElementById("liveGrid");
+      try {
+        let d = null;
+        try {
+          const res = await fetch("/api/account", { cache: "no-store" });
+          if (res.ok) d = await res.json();
+        } catch (e) {}
+        if (!d || !d.ok) {
+          const snap = await fetch("account.json", { cache: "no-store" });
+          d = await snap.json();
+        }
+        if (!d.ok) throw new Error(d.error || "查询失败");
+        meta.textContent = `${d.env} · ${d.type} · ${d.card} · 更新于 ${d.updated}`;
+        grid.innerHTML = [
+          liveCard("总资产", "$" + money(d.total_assets, 2), "美元计价"),
+          liveCard("持仓市值", "$" + money(d.market_val, 2), "证券市值"),
+          liveCard("现金", "$" + money(d.cash, 2), "美元现金", d.cash < 0),
+          liveCard("购买力", "$" + money(d.power, 2), ""),
+          liveCard("冻结资金", "$" + money(d.frozen_cash, 2), ""),
+          liveCard("约合港币总资产", "HK$" + money(d.hkd_assets, 0), "同一账户"),
+        ].join("");
+      } catch (err) {
+        meta.innerHTML = `<span class="err">读取失败：${err.message}。请确认 OpenD 已登录。</span>`;
+      }
+    }
+    document.getElementById("refreshLive").onclick = loadLive;
+    loadLive();
+    setInterval(loadLive, 15000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "updated": "2026-10-03 19:41:47",
+  "env": "实盘",
+  "type": "MARGIN",
+  "card": "尾号 0197",
+  "currency": "USD",
+  "total_assets": 2472.58,
+  "market_val": 5924.58,
+  "cash": -3452.0,
+  "power": 124.945,
+  "frozen_cash": 1.3599999999999999,
+  "usd_assets": 2472.58,
+  "hkd_assets": 19403.2254,
+  "interest": 3453.36
+}

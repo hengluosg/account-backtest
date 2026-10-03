@@ -165,10 +165,12 @@
       font-weight: 600;
       color: var(--muted);
     }
-    #navChart, #ddChart, #yearChart { width: 100%; }
+    #navChart, #ddChart, #yearChart, #liveChart { width: 100%; }
     #navChart { height: 340px; }
     #ddChart { height: 220px; }
     #yearChart { height: 260px; }
+    #liveChart { height: 300px; }
+    .live-empty { color: var(--muted); font-size: 13px; padding: 8px 12px 12px; }
     .js-plotly-plot .modebar { display: none !important; }
     footer { margin-top: 8px; }
     .err { color: var(--neg); }
@@ -181,6 +183,7 @@
       #navChart { height: 460px; }
       #ddChart { height: 250px; }
       #yearChart { height: 320px; }
+      #liveChart { height: 380px; }
       .card { cursor: pointer; }
       .live-card { cursor: default; }
     }
@@ -202,6 +205,16 @@
         <button id="refreshLive">刷新</button>
       </div>
       <div class="live-grid" id="liveGrid"></div>
+      <div class="toolbar" id="liveToolbar">
+        <button class="on" data-live="total_assets">总资产</button>
+        <button class="on" data-live="market_val">持仓市值</button>
+        <button class="on" data-live="cash">现金</button>
+      </div>
+      <section class="panel">
+        <h2>资金曲线</h2>
+        <div id="liveChart"></div>
+        <div class="live-empty" id="liveHint"></div>
+      </section>
     </section>
     <section class="view" id="viewBack">
       <section class="cards" id="cards"></section>
@@ -232,6 +245,10 @@
     const LABELS = { seriesA: "组合 A", strategy: "STRATEGY", spy: "标普 SP 500" };
     const COLORS = { seriesA: "#3ee0ff", strategy: "#ff4ecd", spy: "#c4f042" };
     const vis = { seriesA: true, strategy: true, spy: true };
+    const LIVE_LABELS = { total_assets: "总资产", market_val: "持仓市值", cash: "现金" };
+    const LIVE_COLORS = { total_assets: "#3ee0ff", market_val: "#ff4ecd", cash: "#c4f042" };
+    const visLive = { total_assets: true, market_val: true, cash: true };
+    let livePoints = [];
     let logScale = false;
     let relative = false;
 
@@ -264,6 +281,14 @@
         btn.classList.toggle("on", vis[k]);
         document.querySelector(`.card[data-key="${k}"]`).classList.toggle("active", vis[k]);
         drawAll();
+      };
+    });
+    document.querySelectorAll("button[data-live]").forEach((btn) => {
+      btn.onclick = () => {
+        const k = btn.dataset.live;
+        visLive[k] = !visLive[k];
+        btn.classList.toggle("on", visLive[k]);
+        drawLiveChart();
       };
     });
     document.getElementById("logBtn").onclick = function () {
@@ -379,7 +404,7 @@
     }
 
     function resizeCharts() {
-      ["navChart", "ddChart", "yearChart"].forEach((id) => {
+      ["navChart", "ddChart", "yearChart", "liveChart"].forEach((id) => {
         const el = document.getElementById(id);
         if (el && el.data) Plotly.Plots.resize(el);
       });
@@ -388,6 +413,7 @@
     function drawAll() { drawNav(); drawDd(); drawYear(); resizeCharts(); }
     window.addEventListener("resize", () => {
       if (document.getElementById("viewBack").classList.contains("show")) drawAll();
+      if (document.getElementById("viewLive").classList.contains("show")) drawLiveChart();
     });
 
     const tabLive = document.getElementById("tabLive");
@@ -398,6 +424,7 @@
       document.getElementById("viewLive").classList.add("show");
       document.getElementById("viewBack").classList.remove("show");
       document.getElementById("subtitle").textContent = "实盘资金";
+      requestAnimationFrame(drawLiveChart);
     };
     tabBack.onclick = () => {
       tabBack.classList.add("on");
@@ -426,6 +453,53 @@
         <div class="s">${extra || ""}</div></div>`;
     }
 
+    function drawLiveChart() {
+      const hint = document.getElementById("liveHint");
+      const points = livePoints;
+      if (!points.length) {
+        hint.textContent = "还没有历史点，同步开始后这里会画出资金曲线。";
+        Plotly.purge("liveChart");
+        return;
+      }
+      hint.textContent = points.length < 3
+        ? "曲线刚开始记录，之后每次同步会多一个点。"
+        : "";
+      const xs = points.map((p) => (p.t || "").replace(" ", "T"));
+      const tracesLive = ["total_assets", "market_val", "cash"].filter((k) => visLive[k]).map((k) => ({
+        x: xs,
+        y: points.map((p) => p[k]),
+        name: LIVE_LABELS[k],
+        type: "scatter",
+        mode: points.length === 1 ? "markers" : "lines+markers",
+        marker: { size: 6, color: LIVE_COLORS[k] },
+        line: { color: LIVE_COLORS[k], width: 2.2 },
+        hovertemplate: "%{x}<br>$%{y:,.2f}<extra>" + LIVE_LABELS[k] + "</extra>",
+      }));
+      const base = layoutBase();
+      const mobile = narrow();
+      Plotly.react("liveChart", tracesLive, {
+        ...base,
+        yaxis: {
+          ...base.yaxis,
+          title: { ...base.yaxis.title, text: mobile ? "美元" : "资金（美元）" },
+          tickformat: mobile ? "~s" : ",.0f",
+          zeroline: true,
+        },
+        xaxis: { ...base.xaxis, type: "date" },
+      }, plotCfg);
+    }
+
+    async function loadLiveHistory() {
+      try {
+        const res = await fetch("account_history.json?t=" + Date.now(), { cache: "no-store" });
+        if (res.ok) {
+          const hist = await res.json();
+          if (hist && Array.isArray(hist.points) && hist.points.length) livePoints = hist.points;
+        }
+      } catch (e) {}
+      drawLiveChart();
+    }
+
     async function loadLive() {
       const meta = document.getElementById("liveMeta");
       const grid = document.getElementById("liveGrid");
@@ -449,9 +523,18 @@
           liveCard("冻结资金", "$" + money(d.frozen_cash, 2), ""),
           liveCard("港币总资产", "HK$" + money(d.hkd_assets, 0), "同一账户"),
         ].join("");
+        if (!livePoints.length) {
+          livePoints = [{
+            t: d.updated,
+            total_assets: d.total_assets,
+            market_val: d.market_val,
+            cash: d.cash,
+          }];
+        }
       } catch (err) {
         meta.innerHTML = `<span class="err">读取失败：${err.message}</span>`;
       }
+      await loadLiveHistory();
     }
     document.getElementById("refreshLive").onclick = loadLive;
     loadLive();
